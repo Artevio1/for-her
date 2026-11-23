@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Сая — 3D Сердце</title>
+    <!-- Подключаем Tailwind CSS для типографики и центрирования -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Шрифты для романтичной и современной типографики -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #08050a;
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+        }
+
+        /* Холст во весь экран */
+        #heartCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Центральный блок с именем и признанием */
+        .message-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .recipient-name {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(2.1rem, 8.5vw, 4.6rem);
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            line-height: 1.1;
+            margin-bottom: 0.55rem;
+            color: #fff5f8;
+            text-shadow: 0 0 24px rgba(255, 77, 136, 0.75), 0 0 48px rgba(255, 77, 136, 0.4);
+            opacity: 0.78;
+            transform: scale(0.97);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                        text-shadow 0.8s ease;
+        }
+
+        .confession-text {
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(0.82rem, 3.2vw, 1.12rem);
+            font-weight: 300;
+            line-height: 1.55;
+            max-width: min(76vw, 25rem);
+            color: rgba(255, 232, 240, 0.88);
+            text-shadow: 0 2px 14px rgba(8, 5, 10, 0.95), 0 0 20px rgba(255, 77, 136, 0.35);
+            opacity: 0.45;
+            transform: translateY(6px);
+            transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Состояние при взаимодействии (свайпе/касании) — текст ярко проявляется */
+        .message-overlay.revealed .recipient-name {
+            opacity: 1;
+            transform: scale(1.03);
+            text-shadow: 0 0 32px rgba(255, 77, 136, 0.95),
+                         0 0 65px rgba(255, 160, 190, 0.65);
+        }
+
+        .message-overlay.revealed .confession-text {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Канвас для 3D-частиц -->
+    <canvas id="heartCanvas"></canvas>
+
+    <!-- Центральная типографика (имя и признание) -->
+    <div id="messageOverlay" class="message-overlay">
+        <div class="px-4 py-3 rounded-3xl transition-all duration-700" style="background: radial-gradient(circle, rgba(8,5,10,0.52) 0%, rgba(8,5,10,0) 75%);">
+            <h1 id="displayName" class="recipient-name">Сая</h1>
+            <p id="displayMessage" class="confession-text">Хочу что бы ты знала что я буду любить<br>даже в цифровом мире</p>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Настройки открытки: розовая цветовая гамма и словарь «Я тебя люблю» на 52 языках мира
+         */
+        const CARD_CONFIG = {
+            bg: "#08050a",
+            colors: [
+                [255, 65, 125],   // Ярко-розовый
+                [235, 30, 85],    // Малиново-алый
+                [255, 135, 175],  // Нежно-розовый
+                [255, 215, 170],  // Тёплая золотистая искра
+                [255, 245, 250]   // Белое сияние
+            ]
+        };
+
+        const LOVE_PHRASES = [
+            "Я тебя люблю",            // Русский
+            "Мен сені жақсы көремін",  // Казахский
+            "I love you",              // Английский
+            "Je t'aime",               // Французский
+            "愛してる",                 // Японский
+            "사랑해",                   // Корейский
+            "Te amo",                  // Испанский
+            "Ti amo",                  // Итальянский
+            "Ich liebe dich",          // Немецкий
+            "Seni seviyorum",          // Турецкий
+            "მიყვარხარ",               // Грузинский
+            "Ես քեզ սիրում եմ",        // Армянский
+            "我爱你",                   // Китайский
+            "أحبك",                    // Арабский
+            "Eu te amo",               // Португальский
+            "Kocham cię",              // Польский
+            "Miluji tě",               // Чешский
+            "Σ' αγαπώ",                // Греческий
+            "मैं तुमसे प्यार करता हूँ", // Хинди
+            "Anh yêu em",              // Вьетнамский
+            "ฉันรักคุณ",                // Тайский
+            "Jag älskar dig",          // Шведский
+            "Jeg elsker deg",          // Норвежский
+            "Minä rakastan sinua",     // Финский
+            "Ik hou van jou",          // Нидерландский
+            "Я тебе кохаю",            // Украинский
+            "Я цябе кахаю",            // Белорусский
+            "Men seni sevaman",        // Узбекский
+            "Мен сени сүйөм",          // Кыргызский
+            "Мин сине яратам",         // Татарский
+            "Səni sevirəm",            // Азербайджанский
+            "Волим те",                // Сербский
+            "Обичам те",               // Болгарский
+            "Te iubesc",               // Румынский
+            "Szeretlek",               // Венгерский
+            "אני אוהב אותך",           // Иврит
+            "Nakupenda",               // Суахили
+            "Te amo",                  // Латынь
+            "Mi amas vin",             // Эсперанто
+            "Aloha wau iā ʻoe",        // Гавайский
+            "Jeg elsker dig",          // Датский
+            "Ég elska þig",            // Исландский
+            "T'estimo",                // Каталанский
+            "Ma armastan sind",        // Эстонский
+            "Es tevi mīlu",            // Латышский
+            "Aš tave myliu",           // Литовский
+            "Volim te",                // Хорватский
+            "Ljubim te",               // Словенский
+            "Ľúbim ťa",                // Словацкий
+            "Aku cinta kamu",          // Индонезийский
+            "Mahal kita",              // Тагальский
+            "دوستت دارم"               // Персидский
+        ];
+
+        // Элементы DOM
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageOverlay = document.getElementById('messageOverlay');
+
+        let width = 0;
+        let height = 0;
+        let dpr = 1;
+        let heartScale = 14;
+
+        // Массивы частиц сердца, фоновой пыли и всплывающих признаний
+        let particles = [];
+        let ambientDust = [];
+        let floatingLoveLabels = [];
+
+        // Состояние указателя и анти-спам таймер для появления слов
+        const pointer = {
+            x: -9999,
+            y: -9999,
+            active: false,
+            lastMoveTime: 0
+        };
+
+        let hoveredParticleIndex = -1;
+        let lastSpawnedParticleIndex = -1;
+        let lastSpawnTime = 0;
+        let lastSpawnX = -9999;
+        let lastSpawnY = -9999;
+        let lastPhraseIndex = -1;
+        let revealTimeout = null;
+
+        /**
+         * Выбор случайной фразы на одном из языков мира без повторения подряд
+         */
+        function getRandomLovePhrase() {
+            let idx = Math.floor(Math.random() * LOVE_PHRASES.length);
+            if (idx === lastPhraseIndex) {
+                idx = (idx + 1) % LOVE_PHRASES.length;
+            }
+            lastPhraseIndex = idx;
+            return LOVE_PHRASES[idx];
+        }
+
+        /**
+         * Создание всплывающей надписи над подсвеченной точкой
+         */
+        function spawnFloatingLove(x, y, r, g, b) {
+            const isMobile = width < 640;
+            const maxLabels = isMobile ? 6 : 8;
+
+            // Ограничиваем количество одновременно летящих надписей, чтобы экран оставался чистым
+            while (floatingLoveLabels.length >= maxLabels) {
+                floatingLoveLabels.shift();
+            }
+
+            // Лёгкий разброс по горизонтали, чтобы слова в шлейфе не слипались друг с другом
+            const offsetX = (Math.random() - 0.5) * (isMobile ? 16 : 24);
+            const driftX = (Math.random() - 0.5) * 0.32;
+            const safeMargin = isMobile ? 85 : 95;
+
+            floatingLoveLabels.push({
+                text: getRandomLovePhrase(),
+                x: Math.max(safeMargin, Math.min(width - safeMargin, x + offsetX)),
+                y: y - 14,
+                vx: driftX,
+                vy: -(0.45 + Math.random() * 0.25),
+                createdAt: performance.now(),
+                duration: 2300,
+                r: Math.min(255, r + 40),
+                g: Math.min(255, g + 45),
+                b: Math.min(255, b + 45)
+            });
+        }
+
+        /**
+         * Математическая генерация объёмной 3D-точки внутри или на поверхности сердца
+         */
+        function generateHeartPoint() {
+            const t = Math.random() * Math.PI * 2;
+
+            // Формула контура сердца
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+
+            // Распределяем точки от оболочки внутрь для создания 3D-объёма
+            const shellFactor = Math.pow(Math.random(), 0.32);
+            x *= shellFactor;
+            y *= shellFactor;
+
+            // Толщина сердца по оси Z зависит от близости к центру
+            const distFromCenter = Math.sqrt((x * x) / 256 + (y * y) / 256);
+            const maxZ = Math.max(0, 1 - distFromCenter * 0.85) * 9.5;
+            const zSign = Math.random() < 0.5 ? -1 : 1;
+            const z = zSign * Math.pow(Math.random(), 0.65) * maxZ;
+
+            return { x, y, z, isEdge: shellFactor > 0.88 };
+        }
+
+        /**
+         * Инициализация тысяч частиц сердца и фоновой пыли
+         */
+        function initParticles() {
+            const isMobile = width < 640;
+            // На телефоне оптимизируем число точек до 1400, чтобы между ними оставался воздух и они не слипались
+            const count = isMobile ? 1400 : 3200;
+
+            particles = [];
+            for (let i = 0; i < count; i++) {
+                const pt = generateHeartPoint();
+                const colorIndex = Math.floor(Math.random() * CARD_CONFIG.colors.length);
+                const c = CARD_CONFIG.colors[colorIndex];
+
+                // Начальная позиция — разбросана по всему экрану, чтобы красиво собраться в сердце при старте
+                const startAngle = Math.random() * Math.PI * 2;
+                const startDist = (Math.random() * 0.6 + 0.3) * Math.max(width, height);
+
+                particles.push({
+                    hx: pt.x,
+                    hy: pt.y,
+                    hz: pt.z,
+                    isEdge: pt.isEdge,
+
+                    ox: Math.cos(startAngle) * startDist,
+                    oy: Math.sin(startAngle) * startDist,
+                    oz: (Math.random() - 0.5) * 400,
+
+                    vx: 0,
+                    vy: 0,
+                    vz: 0,
+
+                    screenX: 0,
+                    screenY: 0,
+                    highlight: 0,
+
+                    size: isMobile
+                        ? (pt.isEdge ? (Math.random() * 1.25 + 0.75) : (Math.random() * 1.0 + 0.45))
+                        : (pt.isEdge ? (Math.random() * 1.55 + 0.85) : (Math.random() * 1.25 + 0.5)),
+                    alpha: pt.isEdge ? (Math.random() * 0.45 + 0.55) : (Math.random() * 0.4 + 0.25),
+                    twinkleSpeed: Math.random() * 0.025 + 0.01,
+                    twinklePhase: Math.random() * Math.PI * 2,
+                    r: c[0],
+                    g: c[1],
+                    b: c[2]
+                });
+            }
+
+            // Фоновые парящие пылинки
+            ambientDust = [];
+            const dustCount = isMobile ? 35 : 75;
+            for (let i = 0; i < dustCount; i++) {
+                ambientDust.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.2,
+                    vy: -Math.random() * 0.28 - 0.08,
+                    size: Math.random() * 1.6 + 0.5,
+                    alpha: Math.random() * 0.32 + 0.08
+                });
+            }
+        }
+
+        /**
+         * Адаптация размера холста под разрешение экрана
+         */
+        function resizeCanvas() {
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            // На вертикальных мобильных экранах масштабируем сердце так, чтобы оно занимало ~84% ширины экрана
+            if (width < height) {
+                heartScale = (width * 0.84) / 32;
+            } else {
+                heartScale = Math.min(width, height) / 38;
+            }
+        }
+
+        /**
+         * Функция двойного удара сердца (спокойный пульс ~62 удара в минуту)
+         */
+        function getHeartbeatPulse(timeSec) {
+            const cycle = (timeSec * 0.68) % 1;
+            const beat1 = Math.exp(-Math.pow((cycle - 0.16) / 0.068, 2));
+            const beat2 = 0.58 * Math.exp(-Math.pow((cycle - 0.34) / 0.078, 2));
+            return beat1 + beat2;
+        }
+
+        /**
+         * Активация яркого проявления текста в центре при касании сердца
+         */
+        function triggerTextReveal() {
+            messageOverlay.classList.add('revealed');
+            clearTimeout(revealTimeout);
+            revealTimeout = setTimeout(() => {
+                messageOverlay.classList.remove('revealed');
+            }, 3600);
+        }
+
+        /**
+         * Поиск строго ОДНОЙ ближайшей к курсору/пальцу точки сердца и запуск всплывающего признания
+         */
+        function checkParticleHover(now, forceSpawn = false) {
+            if (!pointer.active || particles.length === 0) {
+                hoveredParticleIndex = -1;
+                return;
+            }
+
+            // Компактный радиус захвата, чтобы под палец попадала строго одна ближайшая точка
+            const hoverRadius = width < 640 ? 22 : 24;
+            const hoverRadiusSq = hoverRadius * hoverRadius;
+
+            let closestIdx = -1;
+            let minDistSq = hoverRadiusSq;
+
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                const dx = p.screenX - pointer.x;
+                const dy = p.screenY - pointer.y;
+                const dSq = dx * dx + dy * dy;
+
+                if (dSq < minDistSq) {
+                    minDistSq = dSq;
+                    closestIdx = i;
+                }
+            }
+
+            hoveredParticleIndex = closestIdx;
+
+            if (closestIdx !== -1) {
+                const p = particles[closestIdx];
+                p.highlight = 1.0;
+
+                const isNewParticle = closestIdx !== lastSpawnedParticleIndex;
+                const elapsed = now - lastSpawnTime;
+                const moveDistSq = Math.pow(p.screenX - lastSpawnX, 2) + Math.pow(p.screenY - lastSpawnY, 2);
+                const minStepSq = 28 * 28; // Минимальный сдвиг 28px при ведении пальцем, чтобы слова не слипались
+
+                if (forceSpawn || (isNewParticle && elapsed >= 250 && moveDistSq >= minStepSq)) {
+                    spawnFloatingLove(p.screenX, p.screenY, p.r, p.g, p.b);
+                    lastSpawnedParticleIndex = closestIdx;
+                    lastSpawnTime = now;
+                    lastSpawnX = p.screenX;
+                    lastSpawnY = p.screenY;
+                }
+            }
+        }
+
+        /**
+         * Обновление координат указателя (без разлёта частиц)
+         */
+        function updatePointer(clientX, clientY, isTap = false) {
+            pointer.x = clientX;
+            pointer.y = clientY;
+            pointer.active = true;
+            pointer.lastMoveTime = performance.now();
+
+            const dx = clientX - width / 2;
+            const dy = clientY - height / 2;
+            const maxRadius = Math.min(width, height) * 0.45;
+            if (dx * dx + dy * dy < maxRadius * maxRadius) {
+                triggerTextReveal();
+            }
+
+            checkParticleHover(pointer.lastMoveTime, isTap);
+        }
+
+        // События мыши
+        canvas.addEventListener('mousemove', (e) => {
+            updatePointer(e.clientX, e.clientY, false);
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            updatePointer(e.clientX, e.clientY, true);
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            pointer.active = false;
+            hoveredParticleIndex = -1;
+        });
+
+        // События сенсорного экрана (мобильные устройства)
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                const t = e.touches[0];
+                updatePointer(t.clientX, t.clientY, true);
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                const t = e.touches[0];
+                updatePointer(t.clientX, t.clientY, false);
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', () => {
+            pointer.active = false;
+            hoveredParticleIndex = -1;
+        });
+
+        /**
+         * Отрисовка и анимация всплывающих надписей «Я тебя люблю» на разных языках мира
+         */
+        function renderFloatingLoveLabels(now) {
+            if (floatingLoveLabels.length === 0) return;
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const fontSize = width < 640 ? 13 : 15;
+            ctx.font = `400 ${fontSize}px 'Inter', sans-serif`;
+
+            for (let i = floatingLoveLabels.length - 1; i >= 0; i--) {
+                const item = floatingLoveLabels[i];
+                const age = now - item.createdAt;
+
+                if (age >= item.duration) {
+                    floatingLoveLabels.splice(i, 1);
+                    continue;
+                }
+
+                // Плавное движение вверх
+                item.x += item.vx;
+                item.y += item.vy;
+                item.vy *= 0.992;
+
+                const progress = age / item.duration;
+
+                // Быстрое появление в начале (первые 15%) и плавное затухание в конце
+                let alpha = 1;
+                if (progress < 0.15) {
+                    alpha = progress / 0.15;
+                } else if (progress > 0.55) {
+                    alpha = 1 - (progress - 0.55) / 0.45;
+                }
+                alpha = Math.max(0, Math.min(1, alpha));
+
+                // Лёгкое увеличение масштаба при всплытии
+                const scale = 0.92 + progress * 0.14;
+
+                ctx.save();
+                ctx.translate(item.x, item.y);
+                ctx.scale(scale, scale);
+
+                // Мягкое розово-золотое свечение вокруг текста для читаемости на фоне сердца
+                ctx.shadowColor = `rgba(${item.r}, ${item.g}, ${item.b}, ${(alpha * 0.9).toFixed(3)})`;
+                ctx.shadowBlur = 12;
+
+                // Тёмная подложка-тень для контраста поверх центральных букв
+                ctx.fillStyle = `rgba(8, 5, 10, ${(alpha * 0.72).toFixed(3)})`;
+                ctx.fillText(item.text, 0, 1.5);
+
+                // Основной светящийся текст признания
+                ctx.fillStyle = `rgba(255, 245, 250, ${(alpha * 0.96).toFixed(3)})`;
+                ctx.fillText(item.text, 0, 0);
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        /**
+         * Главный цикл анимации сердца и подсветки частиц
+         */
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const timeSec = now * 0.001;
+
+            ctx.fillStyle = CARD_CONFIG.bg;
+            ctx.fillRect(0, 0, width, height);
+
+            // Центральное мягкое свечение позади сердца
+            const pulse = getHeartbeatPulse(timeSec);
+            const currentScale = heartScale * (1 + pulse * 0.13);
+
+            const centerX = width * 0.5;
+            const centerY = height * 0.48;
+
+            const auraRadius = Math.min(width, height) * (0.34 + pulse * 0.05);
+            const auraGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, auraRadius);
+            const mainColor = CARD_CONFIG.colors[0];
+            auraGrad.addColorStop(0, `rgba(${mainColor[0]}, ${mainColor[1]}, ${mainColor[2]}, ${0.14 + pulse * 0.09})`);
+            auraGrad.addColorStop(0.55, `rgba(${mainColor[0]}, ${mainColor[1]}, ${mainColor[2]}, 0.04)`);
+            auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = auraGrad;
+            ctx.fillRect(0, 0, width, height);
+
+            // Фоновая звёздная пыль
+            for (let i = 0; i < ambientDust.length; i++) {
+                const d = ambientDust[i];
+                d.x += d.vx;
+                d.y += d.vy;
+                if (d.y < -10) d.y = height + 10;
+                if (d.x < -10) d.x = width + 10;
+                if (d.x > width + 10) d.x = -10;
+
+                ctx.fillStyle = `rgba(255, 240, 245, ${d.alpha})`;
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Очень плавное, медитативное 3D-вращение сердца вокруг оси Y и лёгкий наклон
+            const rotY = Math.sin(timeSec * 0.22) * 0.45 + timeSec * 0.095;
+            const rotX = Math.sin(timeSec * 0.16) * 0.10;
+
+            const cosY = Math.cos(rotY);
+            const sinY = Math.sin(rotY);
+            const cosX = Math.cos(rotX);
+            const sinX = Math.sin(rotX);
+
+            ctx.globalCompositeOperation = 'lighter';
+
+            const fov = 520;
+
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+
+                // Вращение базовой 3D-точки сердца (форма остаётся цельной и не расплывается)
+                let x1 = p.hx * cosY - p.hz * sinY;
+                let z1 = p.hz * cosY + p.hx * sinY;
+                let y1 = p.hy * cosX - z1 * sinX;
+                let z2 = z1 * cosX + p.hy * sinX;
+
+                const targetX = x1 * currentScale;
+                const targetY = y1 * currentScale;
+                const targetZ = z2 * currentScale;
+
+                // Плавное притяжение к форме сердца (используется только при начальной сборке)
+                if (Math.abs(p.ox) > 0.01 || Math.abs(p.oy) > 0.01 || Math.abs(p.oz) > 0.01) {
+                    const springK = 0.042;
+                    const damping = 0.87;
+
+                    p.vx = (p.vx - p.ox * springK) * damping;
+                    p.vy = (p.vy - p.oy * springK) * damping;
+                    p.vz = (p.vz - p.oz * springK) * damping;
+
+                    p.ox += p.vx;
+                    p.oy += p.vy;
+                    p.oz += p.vz;
+                } else {
+                    p.ox = 0;
+                    p.oy = 0;
+                    p.oz = 0;
+                }
+
+                const curX = targetX + p.ox;
+                const curY = targetY + p.oy;
+                const curZ = targetZ + p.oz;
+
+                // Перспективная проекция на 2D-экран
+                const depth = fov / Math.max(120, fov + curZ);
+                p.screenX = centerX + curX * depth;
+                p.screenY = centerY + curY * depth;
+
+                // Плавное затухание подсветки точки после отведения курсора
+                if (i === hoveredParticleIndex && pointer.active) {
+                    p.highlight = Math.min(1, p.highlight + 0.18);
+                } else if (p.highlight > 0) {
+                    p.highlight = Math.max(0, p.highlight - 0.035);
+                }
+
+                // Отрисовка светящейся частицы
+                p.twinklePhase += p.twinkleSpeed;
+                const twinkle = 0.78 + 0.22 * Math.sin(p.twinklePhase);
+
+                const depthBrightness = Math.min(1.25, Math.max(0.28, (depth - 0.55) * 1.45));
+                const finalAlpha = Math.min(1, p.alpha * twinkle * depthBrightness + pulse * 0.12 + p.highlight * 0.65);
+                const finalSize = Math.max(0.4, p.size * depth * (1 + pulse * 0.08 + p.highlight * 1.65));
+
+                // Если точка подсвечена наведением — рисуем вокруг неё мягкий светящийся ореол
+                if (p.highlight > 0.04) {
+                    const haloRadius = finalSize * 4.5;
+                    const haloGrad = ctx.createRadialGradient(p.screenX, p.screenY, 0, p.screenX, p.screenY, haloRadius);
+                    haloGrad.addColorStop(0, `rgba(255, 245, 250, ${(p.highlight * 0.85).toFixed(3)})`);
+                    haloGrad.addColorStop(0.4, `rgba(${p.r}, ${p.g}, ${p.b}, ${(p.highlight * 0.45).toFixed(3)})`);
+                    haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                    ctx.fillStyle = haloGrad;
+                    ctx.beginPath();
+                    ctx.arc(p.screenX, p.screenY, haloRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = p.highlight > 0.2
+                    ? `rgba(255, 245, 250, ${finalAlpha.toFixed(3)})`
+                    : `rgba(${p.r}, ${p.g}, ${p.b}, ${finalAlpha.toFixed(3)})`;
+                ctx.beginPath();
+                ctx.arc(p.screenX, p.screenY, finalSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Обновляем поиск ближайшей точки при вращении сердца только если палец/курсор активно двигается
+            if (pointer.active && (now - pointer.lastMoveTime < 350)) {
+                checkParticleHover(now, false);
+            }
+
+            // Рисуем всплывающие признания на разных языках мира поверх сердца
+            renderFloatingLoveLabels(now);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        window.onload = function () {
+            resizeCanvas();
+            initParticles();
+            requestAnimationFrame(animate);
+
+            // Плавно проявляем текст после того, как частицы соберутся в сердце
+            setTimeout(() => {
+                triggerTextReveal();
+            }, 1800);
+        };
+    </script>
+</body>
+</html>
